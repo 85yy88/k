@@ -7,7 +7,7 @@ set -e
 
 GITHUB_USER="85yy88"
 REPO_NAME="k"
-REPO_URL="https://github.com/${GITHUB_USER}/${REPO_NAME}.git"
+REPO_URL="git@github.com:${GITHUB_USER}/${REPO_NAME}.git"
 TERMUX_SCRIPT_PATH="/storage/emulated/0/Download/Termux脚本"
 
 echo "========================================"
