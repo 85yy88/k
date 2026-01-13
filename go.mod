@@ -11,5 +11,5 @@ require (
 	golang.org/x/image v0.21.0
 )
 
-replace github.com/Yeah114/WaterStructure => ../源码/modules/WaterStructure
-replace github.com/Yeah114/blocks => ../源码/modules/blocks
+replace github.com/Yeah114/WaterStructure => ./modules/WaterStructure
+replace github.com/Yeah114/blocks => ./modules/blocks
