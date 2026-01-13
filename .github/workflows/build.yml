@@ -1,0 +1,74 @@
+name: Build Termux Binary
+
+on:
+  workflow_dispatch:  # 手动触发
+  push:
+    branches: [ main, master ]  # 任何推送到 main 或 master 分支都会触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25'
+      
+      - name: Setup local modules
+        run: |
+          # 检查并设置本地模块路径
+          if [ -d "../源码/modules/WaterStructure" ]; then
+            echo "Found WaterStructure in parent directory"
+          elif [ -d "../../源码/modules/WaterStructure" ]; then
+            echo "Found WaterStructure in grandparent directory"
+          else
+            echo "Warning: Local modules not found, will use remote"
+          fi
+      
+      - name: Build for Android ARM64
+        env:
+          GOOS: android
+          GOARCH: arm64
+          CGO_ENABLED: 0
+        run: |
+          # 切换到正确的目录
+          if [ -f "main.go" ]; then
+            echo "Building in current directory"
+          elif [ -f "Termux脚本/main.go" ]; then
+            cd Termux脚本
+            echo "Building in Termux脚本 directory"
+          else
+            echo "Error: main.go not found"
+            exit 1
+          fi
+          
+          # 下载依赖
+          go mod download || {
+            echo "First download attempt failed, retrying..."
+            export GOPROXY="https://goproxy.cn,direct"
+            go mod download
+          }
+          
+          # 编译
+          go build -ldflags="-s -w" -o fatalder-termux main.go
+          
+          # 检查文件
+          if [ -f "fatalder-termux" ]; then
+            ls -lh fatalder-termux
+            echo "Build successful!"
+          else
+            echo "Error: Build failed, output file not found"
+            exit 1
+          fi
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: fatalder-termux
+          path: |
+            fatalder-termux
+            Termux脚本/fatalder-termux
+          retention-days: 30
+          if-no-files-found: error
