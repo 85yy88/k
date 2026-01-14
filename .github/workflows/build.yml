@@ -19,20 +19,132 @@ jobs:
 
       - name: Initialize Go module (若未初始化)
         run: |
-          if [ ! -f go.mod ]; then
-            go mod init github.com/${{ github.repository }}
+          # 切换到 Termux脚本 目录
+          if [ -f "Termux脚本/main.go" ]; then
+            cd Termux脚本
+            echo "Building in Termux脚本 directory"
+          elif [ -f "main.go" ]; then
+            echo "Building in current directory"
+          else
+            echo "Error: main.go not found"
+            exit 1
           fi
-          go mod tidy  # 自动下载依赖
+          
+          # 检查 go.mod
+          if [ ! -f "go.mod" ]; then
+            echo "Error: go.mod not found"
+            exit 1
+          fi
+          
+          # 验证模块路径
+          echo "Checking go.mod replace directives:"
+          grep "replace" go.mod || echo "No replace directives"
+          
+          # 验证模块是否存在
+          if [ -d "modules/WaterStructure" ] && [ -f "modules/WaterStructure/go.mod" ]; then
+            echo "✓ Found modules/WaterStructure/go.mod"
+          else
+            echo "✗ Error: modules/WaterStructure/go.mod not found"
+            exit 1
+          fi
+          
+          if [ -d "modules/blocks" ] && [ -f "modules/blocks/go.mod" ]; then
+            echo "✓ Found modules/blocks/go.mod"
+          else
+            echo "✗ Error: modules/blocks/go.mod not found"
+            exit 1
+          fi
+          
+          # 验证 bdump 模块（在 WaterStructure/modules/bdump）
+          if [ -d "modules/WaterStructure/modules/bdump" ] && [ -f "modules/WaterStructure/modules/bdump/go.mod" ]; then
+            echo "✓ Found modules/WaterStructure/modules/bdump/go.mod"
+          else
+            echo "✗ Error: modules/WaterStructure/modules/bdump/go.mod not found"
+            exit 1
+          fi
+          
+          # 验证 WaterStructure 的 replace 路径是否正确
+          echo ""
+          echo "Checking WaterStructure/go.mod replace directives:"
+          grep "replace" modules/WaterStructure/go.mod || echo "No replace directives in WaterStructure/go.mod"
+          
+          # 显示当前目录结构（用于调试）
+          echo ""
+          echo "Current directory structure:"
+          pwd
+          echo ""
+          echo "Modules directory:"
+          ls -la modules/ || echo "modules directory not found"
+          echo ""
+          echo "WaterStructure/modules directory:"
+          ls -la modules/WaterStructure/modules/ 2>/dev/null || echo "modules/WaterStructure/modules not found"
+          
+          # 设置 Go 环境变量
+          export GOPROXY="https://goproxy.cn,direct"
+          export GOSUMDB="sum.golang.google.cn"
+          
+          # 下载依赖
+          echo "Downloading dependencies..."
+          go mod download || {
+            echo "First download attempt failed, retrying..."
+            go mod download
+          }
+          
+          # 整理依赖
+          echo "Running go mod tidy..."
+          go mod tidy || {
+            echo "Warning: go mod tidy failed, continuing..."
+          }
+          
+          # 验证依赖
+          echo "Verifying dependencies..."
+          go mod verify || {
+            echo "Warning: go mod verify failed, continuing..."
+          }
 
       - name: Build for Termux (ARM64架构)
         run: |
+          # 切换到 Termux脚本 目录（与上一步保持一致）
+          if [ -f "Termux脚本/main.go" ]; then
+            cd Termux脚本
+          fi
+          
+          # 设置编译环境变量
+          export GOARCH=arm64
+          export GOOS=linux
+          export CGO_ENABLED=0
+          export GOPROXY="https://goproxy.cn,direct"
+          export GOSUMDB="sum.golang.google.cn"
+          
           # 强制指定Termux运行环境的编译参数
-          GOARCH=arm64 GOOS=linux CGO_ENABLED=0 \
-          go build -trimpath -ldflags "-s -w" -o fatalder-termux ./...
+          echo "Building for Termux (ARM64)..."
+          go build -trimpath -ldflags "-s -w" -o fatalder-termux main.go
+          
+          # 如果编译失败，显示详细错误
+          if [ $? -ne 0 ]; then
+            echo "Build failed, showing go env:"
+            go env
+            echo ""
+            echo "Showing go.mod:"
+            cat go.mod
+            exit 1
+          fi
+          
+          # 检查编译结果
+          if [ -f "fatalder-termux" ]; then
+            ls -lh fatalder-termux
+            echo "✓ Build successful!"
+          else
+            echo "✗ Error: Build failed, output file not found"
+            exit 1
+          fi
 
       - name: Upload Termux binary
         uses: actions/upload-artifact@v4
         with:
           name: fatalder-termux
-          path: fatalder-termux
+          path: |
+            fatalder-termux
+            Termux脚本/fatalder-termux
           retention-days: 30
+          if-no-files-found: error
